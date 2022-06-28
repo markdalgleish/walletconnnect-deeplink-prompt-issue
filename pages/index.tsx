@@ -17,6 +17,8 @@ const Home: NextPage = () => {
     deepLinkUrl: string | null;
     signer: providers.JsonRpcSigner;
   } | null>(null);
+  const [populatedTransaction, setPopulatedTransaction] =
+    useState<providers.TransactionRequest>();
 
   async function connect() {
     const accounts = await provider.enable();
@@ -82,6 +84,43 @@ const Home: NextPage = () => {
                   >
                     Send transaction
                   </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={async () => {
+                        setPopulatedTransaction(
+                          await signer.populateTransaction({
+                            to: address,
+                            value: 0,
+                          })
+                        );
+                      }}
+                      type="button"
+                    >
+                      Populate transaction
+                    </button>
+
+                    <button
+                      disabled={!populatedTransaction}
+                      onClick={() => {
+                        populatedTransaction &&
+                          signer.sendTransaction(populatedTransaction);
+                      }}
+                      type="button"
+                    >
+                      Send transaction
+                    </button>
+
+                    <button
+                      disabled={!populatedTransaction}
+                      onClick={() => {
+                        populatedTransaction &&
+                          signer.sendUncheckedTransaction(populatedTransaction);
+                      }}
+                      type="button"
+                    >
+                      Send unchecked transaction
+                    </button>
+                  </div>
 
                   {deepLinkUrl && (
                     <>

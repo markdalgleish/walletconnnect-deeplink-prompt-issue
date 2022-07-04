@@ -1,32 +1,55 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { providers } from "ethers";
-import { getAddress } from "ethers/lib/utils";
+import { Deferrable, getAddress, resolveProperties } from "ethers/lib/utils";
 import WalletConnectProvider from "@walletconnect/ethereum-provider";
 import { useEffect, useRef, useState } from "react";
 
-const provider = new WalletConnectProvider({
+const walletConnectProvider = new WalletConnectProvider({
   chainId: 5, // Goerli
   infuraId: "84842078b09946638c03157f83405213", // Default ID
 });
+
+async function populateTransaction(
+  provider: providers.Provider,
+  deferrableTransaction: Deferrable<providers.TransactionRequest>
+): Promise<providers.TransactionRequest> {
+  const resolvedTransaction = await resolveProperties(deferrableTransaction);
+
+  const to = resolvedTransaction.to
+    ? await provider.resolveName(resolvedTransaction.to)
+    : undefined;
+
+  const transaction = {
+    ...resolvedTransaction,
+    ...(to && { to }),
+  };
+
+  const gasLimit =
+    transaction.gasLimit ?? (await provider.estimateGas(transaction));
+
+  return { ...transaction, gasLimit };
+}
 
 const Home: NextPage = () => {
   const [ready, setReady] = useState(false);
   const [connection, setConnection] = useState<{
     address: string;
     deepLinkUrl: string | null;
+    provider: providers.Provider;
     signer: providers.JsonRpcSigner;
   } | null>(null);
   const [populatedTransaction, setPopulatedTransaction] =
     useState<providers.TransactionRequest>();
 
   async function connect() {
-    const accounts = await provider.enable();
+    const accounts = await walletConnectProvider.enable();
     const address = getAddress(accounts[0]);
-    const signer = new providers.Web3Provider(provider).getSigner(address);
+    const provider = new providers.Web3Provider(walletConnectProvider);
+    const signer = provider.getSigner(address);
     const deepLinkJson = localStorage.getItem("WALLETCONNECT_DEEPLINK_CHOICE");
     const deepLinkUrl = deepLinkJson ? JSON.parse(deepLinkJson).href : null;
-    setConnection({ address, deepLinkUrl, signer });
+    setConnection({ address, deepLinkUrl, provider, signer });
   }
 
   const didMount = useRef(false);
@@ -69,7 +92,7 @@ const Home: NextPage = () => {
             </button>
           ) : (
             (() => {
-              const { address, deepLinkUrl, signer } = connection;
+              const { address, deepLinkUrl, provider, signer } = connection;
 
               return (
                 <>
@@ -88,7 +111,7 @@ const Home: NextPage = () => {
                     <button
                       onClick={async () => {
                         setPopulatedTransaction(
-                          await signer.populateTransaction({
+                          await populateTransaction(provider, {
                             to: address,
                             value: 0,
                           })
@@ -148,7 +171,7 @@ const Home: NextPage = () => {
 
                   <button
                     onClick={() => {
-                      provider.disconnect();
+                      walletConnectProvider.disconnect();
                       setConnection(null);
                     }}
                     type="button"
